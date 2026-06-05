@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MANOPOLY — Manon Mikolajczak</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#06080e;--board:#07090f;--cell:#0d1522;--cellh:#182438;
+  --bdr:rgba(255,130,43,.1);--txt:#ede8e2;--dim:#5a6070;
+  --exp:#FF822B;--form:#4D7FFF;--proj:#3B82F6;--comp:#FFAB62;
+  --bap-orange:#FF822B;--bap-blue:#0033CC;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:'Rajdhani',sans-serif}
+
+/* ── SHELL ── */
+.app{position:relative;width:100vw;height:100vh;padding-top:52px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+
+/* ── AMBIENT BACKGROUND GLOW ── */
+.app::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 60% 30% at 50% 80%, rgba(255,130,43,.04) 0%,transparent 70%),
+    radial-gradient(ellipse 40% 20% at 20% 50%, rgba(77,127,255,.03) 0%,transparent 60%);
+}
+
+/* ── HEADER ── */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:60;height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:linear-gradient(to bottom,rgba(6,8,14,.97),rgba(6,8,14,.0));pointer-events:none}
+.hlogo{font-family:'Bebas Neue',sans-serif;font-size:1.55rem;letter-spacing:.25em;background:linear-gradient(90deg,#FF822B,#FF9944,#4D7FFF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 12px rgba(255,130,43,.3))}
+.hname{font-size:.58rem;letter-spacing:.32em;color:var(--dim);text-transform:uppercase;margin-left:12px}
+.hhint{font-size:.56rem;letter-spacing:.18em;color:var(--dim);border:1px solid rgba(255,255,255,.07);padding:3px 11px;border-radius:20px;animation:blink 4s ease-in-out infinite;pointer-events:all}
+@keyframes blink{0%,100%{opacity:.2}55%{opacity:.75}}
+
+/* ── BOARD WRAP ── */
+.bwrap{
+  position:relative;
+  transform-origin:center center;
+  transition:transform .4s cubic-bezier(.16,1,.3,1);
+  z-index:1;
+}
+
+/* ── BOARD 3D ── */
+.board3d{
+  transform:perspective(1100px) rotateX(26deg);
+  transform-origin:center center;
+  transform-style:preserve-3d;
+  filter:
+    drop-shadow(0 50px 90px rgba(0,0,0,.95))
+    drop-shadow(0 0 70px rgba(255,130,43,.06))
+    drop-shadow(0 -4px 40px rgba(77,127,255,.04));
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  animation:tiltIn 1.4s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes tiltIn{
+  0%{transform:perspective(1100px) rotateX(0deg) scale(.9);opacity:0}
+  100%{transform:perspective(1100px) rotateX(26deg) scale(1);opacity:1}
+}
+
+/* ── BOARD GRID ── */
+.board{
+  display:grid;
+  grid-template-columns:120px repeat(9,90px) 120px;
+  grid-template-rows:120px repeat(9,90px) 120px;
+  border:2px solid rgba(255,130,43,.5);
+  background:var(--board);
+  position:relative;
+  overflow:visible;
+  box-shadow:inset 0 0 60px rgba(0,0,0,.5), 0 0 0 1px rgba(255,130,43,.08);
+}
+.board::after{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:
+    repeating-linear-gradient(0deg,transparent,transparent 89px,rgba(255,255,255,.012) 89px,rgba(255,255,255,.012) 90px),
+    repeating-linear-gradient(90deg,transparent,transparent 89px,rgba(255,255,255,.012) 89px,rgba(255,255,255,.012) 90px);
+  background-position:120px 120px;
+}
+
+/* ── CELLS ── */
+.cell{
+  border:1px solid var(--bdr);
+  position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;background:var(--cell);z-index:1;overflow:hidden;
+  transition:background .2s,box-shadow .2s,transform .2s;
+  box-shadow:0 5px 0 rgba(0,0,0,.75),0 9px 18px rgba(0,0,0,.5);
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  will-change:transform;
+}
+.cell:hover{
+  background:var(--cellh);z-index:4;
+  box-shadow:0 5px 0 rgba(0,0,0,.75),0 0 22px var(--glow,rgba(255,255,255,.1)),0 9px 18px rgba(0,0,0,.5);
+  transform:translateZ(6px) scale(1.025);
+}
+/* Cell pop when selected */
+@keyframes cellPop{
+  0%{transform:translateZ(0) scale(1) rotateY(0deg)}
+  20%{transform:translateZ(18px) scale(1.06) rotateY(-4deg)}
+  45%{transform:translateZ(10px) scale(1.03) rotateY(2deg)}
+  70%{transform:translateZ(4px) scale(1.01) rotateY(-.5deg)}
+  100%{transform:translateZ(0) scale(1) rotateY(0deg)}
+}
+.cell.sel{
+  background:rgba(255,215,0,.06);
+  border-color:rgba(255,215,0,.45);
+  z-index:5;
+  box-shadow:0 5px 0 rgba(0,0,0,.75),0 0 34px rgba(255,215,0,.28);
+  animation:cellPop .6s cubic-bezier(.16,1,.3,1) forwards;
+}
+.cell.sel:hover{transform:none}
+
+/* ── CELL INNER (for content rotation on sides) ── */
+.cell-inner{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;width:100%;height:100%;pointer-events:none;
+}
+/* Side cells: rotate content for readability in 3D */
+.cl2 .cell-inner{transform:rotate(-90deg)}
+.cr2 .cell-inner{transform:rotate(90deg)}
+
+/* cell content */
+.ci{font-size:1.8rem;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8));flex-shrink:0}
+.cn{
+  font-size:.66rem;text-align:center;line-height:1.22;padding:1px 4px;
+  text-transform:uppercase;font-weight:700;letter-spacing:.04em;
+  color:#ccdaec;flex-shrink:0;
+}
+.cdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;opacity:.9}
+
+/* Bottom row (Expériences — closest to viewer, most readable): bigger */
+.rb .ci{font-size:2.1rem}
+.rb .cn{font-size:.72rem;color:#ddeaf8;letter-spacing:.05em}
+
+/* color bars */
+.cbar{position:absolute;pointer-events:none;z-index:2}
+.rb  .cbar{top:0;left:0;right:0;height:14px}
+.cl2 .cbar{top:0;bottom:0;right:0;width:14px}
+.rt  .cbar{bottom:0;left:0;right:0;height:14px}
+.cr2 .cbar{top:0;bottom:0;left:0;width:14px}
+
+.cell.chance,.cell.community{background:#0b1526}
+.cell.station{background:#0a1422}
+.cell.station .ci{font-size:1.4rem}
+
+/* ── CORNERS ── */
+.cell.corner{
+  background:#080e1e;overflow:visible;
+  box-shadow:0 5px 0 rgba(0,0,0,.75),0 0 20px rgba(255,130,43,.06);
+}
+.cnr{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;width:100%;height:100%;padding:8px;text-align:center;
+  position:relative;border-radius:1px;
+}
+.cnr-icon{font-size:2.6rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,.8));line-height:1;flex-shrink:0}
+.cnr-lbl{font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:.1em;line-height:1.1;flex-shrink:0}
+.cnr-sub{font-size:.42rem;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;flex-shrink:0}
+.cnr-bar{position:absolute;inset:0;border-radius:1px;pointer-events:none}
+
+/* ── CHARACTER PION ── */
+.char-pion{
+  position:absolute;
+  width:58px;height:78px;
+  z-index:20;
+  pointer-events:none;
+  filter:drop-shadow(0 14px 24px rgba(0,0,0,.98)) drop-shadow(0 4px 8px rgba(0,0,0,.6));
+  transform:translate(-50%,-105%);
+  transition:left .7s cubic-bezier(.16,1,.3,1), top .7s cubic-bezier(.16,1,.3,1);
+  animation:charFloat 2.8s ease-in-out infinite;
+}
+@keyframes charFloat{
+  0%,100%{transform:translate(-50%,-105%) translateY(0)}
+  50%{transform:translate(-50%,-105%) translateY(-10px)}
+}
+/* Hop override: plays once when moving */
+@keyframes charHop{
+  0%{transform:translate(-50%,-105%) translateY(0) scale(1) rotate(0deg)}
+  18%{transform:translate(-50%,-105%) translateY(-22px) scale(1.15) rotate(-9deg)}
+  42%{transform:translate(-50%,-105%) translateY(-30px) scale(1.1) rotate(-12deg)}
+  68%{transform:translate(-50%,-105%) translateY(-8px) scale(.97) rotate(4deg)}
+  85%{transform:translate(-50%,-105%) translateY(-2px) scale(1.02) rotate(-1deg)}
+  100%{transform:translate(-50%,-105%) translateY(0) scale(1) rotate(0deg)}
+}
+.char-pion.hopping{animation:charHop .75s cubic-bezier(.16,1,.3,1) forwards!important}
+
+.char-shadow{
+  position:absolute;z-index:19;pointer-events:none;
+  width:40px;height:10px;
+  background:radial-gradient(ellipse,rgba(0,0,0,.72) 0%,transparent 70%);
+  transform:translate(-50%,-50%);
+  animation:charSh 2.8s ease-in-out infinite;
+  transition:left .7s cubic-bezier(.16,1,.3,1), top .7s cubic-bezier(.16,1,.3,1);
+}
+@keyframes charSh{
+  0%,100%{opacity:.7;transform:translate(-50%,-50%) scaleX(1)}
+  50%{opacity:.22;transform:translate(-50%,-50%) scaleX(.5)}
+}
+
+/* ── BOARD CENTER ── */
+.board-center{
+  grid-column:2/11;grid-row:2/11;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:#080c18;
+  border:1px solid rgba(255,255,255,.04);
+  text-align:center;padding:22px;position:relative;overflow:hidden;
+}
+/* subtle vignette only — no texture */
+.board-center::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 70% 55% at 50% 50%,transparent 40%,rgba(0,0,0,.55) 100%);
+}
+.bc-glow{display:none}
+.bc-kicker{font-size:.58rem;letter-spacing:.5em;color:#7090a8;text-transform:uppercase;margin-bottom:10px;position:relative}
+.bc-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(2.6rem,4vw,4.8rem);
+  background:linear-gradient(130deg,#FF822B 0%,#FF9944 35%,#FFD060 58%,#4D7FFF 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  letter-spacing:.16em;line-height:1;
+  filter:drop-shadow(0 0 30px rgba(255,130,43,.5));
+  position:relative;
+}
+.bc-name{font-size:.68rem;letter-spacing:.3em;color:#a8c8e0;text-transform:uppercase;margin-top:8px;position:relative}
+/* zigzag divider */
+.bc-zz{display:block;width:110px;height:14px;margin:13px auto;opacity:.8;position:relative}
+.bc-quote{
+  font-family:'Inter',sans-serif;font-weight:400;font-size:.94rem;
+  color:#ffffff;font-style:italic;max-width:270px;line-height:1.8;
+  text-shadow:0 1px 12px rgba(0,0,0,.9);position:relative;
+}
+.bc-info{margin-top:13px;display:flex;flex-direction:column;gap:6px;position:relative}
+.bc-info span{font-size:.6rem;color:#c0d8ec;letter-spacing:.06em;text-shadow:0 1px 8px rgba(0,0,0,.8)}
+.bc-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:310px;margin-top:13px;position:relative}
+.bc-chip{
+  font-size:.54rem;letter-spacing:.06em;text-transform:uppercase;
+  border:1px solid rgba(255,255,255,.35);padding:5px 11px;border-radius:12px;
+  color:#ffffff;background:rgba(255,255,255,.12);
+  text-shadow:0 1px 6px rgba(0,0,0,.7);
+}
+
+/* ── CATEGORY LABELS (fixed, positioned by JS) ── */
+.clbl{
+  position:fixed;z-index:10;pointer-events:none;
+  font-family:'Bebas Neue',sans-serif;font-size:.8rem;
+  letter-spacing:.4em;white-space:nowrap;user-select:none;
+  text-shadow:0 0 22px currentColor;opacity:0;
+  transition:opacity .6s .8s;
+}
+.clbl.visible{opacity:.7}
+#lbl-ct{color:#3B82F6}
+#lbl-cb{color:#FF822B}
+#lbl-cl{color:#4D7FFF}
+#lbl-cr{color:#FFAB62}
+
+/* ── PANEL BACKDROP ── */
+.panel-backdrop{
+  position:fixed;inset:0;z-index:40;
+  background:rgba(0,0,0,0);pointer-events:none;
+  transition:background .48s;
+}
+.panel-backdrop.open{background:rgba(0,0,0,.28);pointer-events:all}
+
+/* ── INFO PANEL — BAP editorial style ── */
+.panel{
+  position:fixed;top:0;right:0;height:100%;width:380px;
+  background:#F0E8DC;
+  display:flex;flex-direction:column;
+  transform:translateX(105%);
+  transition:transform .48s cubic-bezier(.16,1,.3,1);
+  z-index:50;
+  box-shadow:-8px 0 60px rgba(0,0,0,.55);
+}
+.panel.open{transform:translateX(0)}
+
+/* BAP orange top bar */
+.panel-accent{
+  height:5px;flex-shrink:0;
+  background:linear-gradient(90deg,#FF822B 0%,#FF9944 55%,#0033CC 100%);
+}
+/* BAP zigzag band */
+.panel-zz{
+  height:22px;flex-shrink:0;overflow:hidden;
+  background:#FF822B;position:relative;
+}
+.panel-zz svg{position:absolute;bottom:0;left:0;width:200%;height:100%}
+
+.ptabs{
+  display:flex;padding:8px 16px;gap:6px;
+  background:#E8DDD1;
+  border-bottom:2px solid #d6c8b8;
+  flex-shrink:0;margin-top:44px;
+}
+.ptab{
+  flex:1;font-size:.46rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:6px 3px;border:1px solid #c8b8a4;
+  background:transparent;color:#7a6a56;border-radius:4px;
+  cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;
+  transition:all .18s;
+}
+.ptab:hover{color:#2a1a08;background:rgba(0,0,0,.06)}
+.ptab.act{color:#fff!important;border-color:transparent!important}
+.pclose{
+  position:absolute;top:10px;right:12px;width:28px;height:28px;border-radius:50%;
+  background:rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.15);
+  color:#5a4a36;cursor:pointer;font-size:.82rem;display:flex;align-items:center;justify-content:center;
+  transition:background .2s;z-index:2;
+}
+.pclose:hover{background:rgba(0,0,0,.16);color:#1a0a00}
+.pc{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.pcard{padding:20px 20px 0;flex:1;display:flex;flex-direction:column}
+.pbar{height:4px;border-radius:0;margin-bottom:16px;flex-shrink:0}
+.ptheme{
+  font-family:'Bebas Neue',sans-serif;font-size:.7rem;letter-spacing:.55em;
+  text-transform:uppercase;margin-bottom:10px;flex-shrink:0;
+}
+.pico{font-size:2.8rem;margin-bottom:12px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.2));flex-shrink:0}
+.ptitle{
+  font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:.04em;
+  line-height:1.05;margin-bottom:14px;flex-shrink:0;color:#0A1966;
+}
+.pstory{font-family:'Inter',sans-serif;font-size:.82rem;line-height:1.8;color:#3a2c1c;flex:1}
+.pstory p{margin-bottom:11px}.pstory p:last-child{margin-bottom:0}
+.ptags{display:flex;flex-wrap:wrap;gap:6px;padding:14px 20px;flex-shrink:0}
+.ptag{
+  font-size:.56rem;letter-spacing:.05em;padding:4px 11px;border-radius:0;
+  border:1.5px solid;font-weight:700;font-family:'Rajdhani',sans-serif;
+  text-transform:uppercase;
+}
+.pnav{display:flex;gap:0;padding:12px 20px 18px;flex-shrink:0;border-top:1px solid #d6c8b8}
+.pnb{
+  flex:1;padding:12px 10px;background:#0A1966;
+  border:none;color:#fff;cursor:pointer;
+  font-family:'Bebas Neue',sans-serif;font-size:.9rem;
+  letter-spacing:.18em;transition:all .15s;text-transform:uppercase;
+}
+.pnb:first-child{border-right:1px solid rgba(255,255,255,.15)}
+.pnb:hover{background:#FF822B}
+
+/* Empty state */
+.pempty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:36px 22px;text-align:center}
+.peico{font-size:2.8rem;opacity:.25}
+.petitle{font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:.15em;color:#8a7a68}
+.pesub{font-size:.62rem;color:#9a8a78;line-height:1.7;max-width:230px;letter-spacing:.04em}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#c8b8a4;border-radius:0}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="hdr">
+    <div style="display:flex;align-items:baseline">
+      <span class="hlogo">MANOPOLY</span>
+      <span class="hname">— Manon Mikolajczak · Portfolio Événementiel</span>
+    </div>
+    <div class="hhint">Cliquez sur une case · ← → pour naviguer</div>
+  </div>
+
+  <!-- Board (no surrounding labels in the DOM — labels are fixed positioned via JS) -->
+  <div class="bwrap" id="bwrap">
+    <div class="board3d">
+      <div class="board" id="board"></div>
+    </div>
+  </div>
+
+  <!-- Category labels — positioned absolutely in viewport via JS -->
+  <div class="clbl" id="lbl-ct">▲ PROJETS &amp; RÉALISATIONS ▲</div>
+  <div class="clbl" id="lbl-cb">▼ EXPÉRIENCES TERRAIN ▼</div>
+  <div class="clbl" id="lbl-cl">◀ FORMATION &amp; ORIGINES ◀</div>
+  <div class="clbl" id="lbl-cr">▶ COMPÉTENCES &amp; VISION ▶</div>
+
+  <!-- Backdrop: click to close panel -->
+  <div class="panel-backdrop" id="backdrop" onclick="closePanel()"></div>
+
+  <!-- Overlay Panel -->
+  <aside class="panel" id="panel">
+    <div class="panel-accent"></div>
+    <div class="panel-zz">
+      <svg viewBox="0 0 400 22" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <polyline points="0,0 20,22 40,0 60,22 80,0 100,22 120,0 140,22 160,0 180,22 200,0 220,22 240,0 260,22 280,0 300,22 320,0 340,22 360,0 380,22 400,0" fill="none" stroke="#F0E8DC" stroke-width="2.5"/>
+      </svg>
+    </div>
+    <button class="pclose" onclick="closePanel()">✕</button>
+    <div class="ptabs">
+      <button class="ptab" id="t-exp" style="color:#FF822B" onclick="fcat('exp',this)">Expériences</button>
+      <button class="ptab" id="t-form" style="color:#4D7FFF" onclick="fcat('form',this)">Formation</button>
+      <button class="ptab" id="t-proj" style="color:#3B82F6" onclick="fcat('proj',this)">Projets</button>
+      <button class="ptab" id="t-comp" style="color:#FFAB62" onclick="fcat('comp',this)">Compétences</button>
+    </div>
+    <div class="pc" id="pc">
+      <div class="pempty">
+        <div class="peico">🗺️</div>
+        <div class="petitle">Explorer le parcours</div>
+        <div class="pesub">Cliquez sur une case pour découvrir les expériences, projets et compétences de Manon.</div>
+      </div>
+    </div>
+  </aside>
+
+</div>
+<script>
+const TH = {
+  exp:    { label:'Expériences Terrain',    col:'#FF822B' },
+  form:   { label:'Formation & Origines',   col:'#4D7FFF' },
+  proj:   { label:'Projets & Réalisations', col:'#3B82F6' },
+  comp:   { label:'Compétences & Vision',   col:'#FFAB62' },
+  corner: { label:'Jalon du Parcours',      col:'#FF822B' },
+  card:   { label:'Carte',                  col:'#8A96A8' },
+  station:{ label:'Compétence Clé',         col:'#6B85C0' },
+};
+
+const SP = [
+{id:0,  type:'corner', th:'corner', name:'GO\nDébut', icon:'▶',
+ title:'Bienvenue dans le Parcours de Manon',
+ story:'Manon Mikolajczak — étudiante en 2e année de Bachelor Événementiel à ISEFAC Lille. Elle cherche une alternance pour septembre 2026 en production événementielle.\n\nCe plateau est son parcours : chaque case est une expérience vécue, un projet réalisé, une compétence forgée. Explorez librement.',
+ tags:['ISEFAC Lille','Bachelor Événementiel','Alternance sept. 2026']},
+
+{id:1,  type:'property', th:'exp', name:'Pizza\nFamily', icon:'🍕',
+ title:'Pizza Family — Le Premier Emploi',
+ story:'Premier vrai job. Manon jongle entre la production en cuisine, le service en salle et la gestion des inventaires. Polyvalence absolue, rigueur sous pression, esprit d\'équipe.\n\nC\'est ici qu\'elle apprend que l\'excellence dans les détails — même une commande bien prise — fait toute la différence dans l\'expérience.',
+ tags:['Production','Service','Polyvalence','Rigueur','Équipe']},
+
+{id:2,  type:'property', th:'exp', name:'Village\nde l\'Authi', icon:'🎪',
+ title:'Village de l\'Authi — 3 Saisons sur le Terrain',
+ story:'2023, 2024, 2026 : trois saisons consécutives. Accueil du public, coordination des animations, gestion des plannings. Chaque saison apporte un niveau de responsabilité supplémentaire.\n\nSon premier laboratoire professionnel grandeur nature, répété et perfectionné année après année.',
+ tags:['Accueil','Animation','Coordination','3 saisons','Terrain']},
+
+{id:3,  type:'community', th:'card', name:'Carte\nParcours', icon:'📦', title:null, story:null, tags:[]},
+
+{id:4,  type:'property', th:'exp', name:'LVMH\nYou & Me Tour', icon:'💎',
+ title:'LVMH You & Me Tour — Brand Ambassador',
+ story:'Sélectionnée pour représenter le groupe LVMH lors de sa tournée nationale de recrutement. Manon accueille les candidats, présente la marque, incarne ses valeurs.\n\nLuxe, exigence, attention au détail — trois mots qui définissent aussi son approche de l\'événementiel.',
+ tags:['LVMH','Brand Ambassador','Tournée nationale','Luxe','Sélection']},
+
+{id:5,  type:'station', th:'station', name:'Gare\nTerrain', icon:'🚆',
+ title:'Intelligence Terrain — Compétence Clé',
+ story:'Savoir lire une salle, anticiper un flux, gérer l\'imprévu sans que le public ne le voie.\n\nCette intelligence terrain se forge dans les festivals, salons et événements. Elle ne s\'apprend pas dans les livres.',
+ tags:['Adaptabilité','Anticipation','Gestion de crise','Réactivité']},
+
+{id:6,  type:'property', th:'exp', name:'La Sauvegarde\ndu Nord', icon:'🤝',
+ title:'Stage — La Sauvegarde du Nord',
+ story:'Service mécénat & communication. Manon prospecte des entreprises partenaires, monte des dossiers de sponsoring, assure la communication de l\'association.\n\nElle découvre l\'événementiel sous l\'angle solidaire : mobiliser des ressources humaines et financières au service d\'une cause.',
+ tags:['Mécénat','Sponsoring','Communication','Stage','Associatif']},
+
+{id:7,  type:'chance', th:'card', name:'Carte\nAnecdote', icon:'❓', title:null, story:null, tags:[]},
+
+{id:8,  type:'property', th:'exp', name:'Giving\nTuesday', icon:'🎁',
+ title:'Giving Tuesday — Pixar × La Sauvegarde du Nord',
+ story:'Événement caritatif conçu de A à Z : scénographie sur le thème Pixar, coordination des équipes bénévoles, animation du public, gestion des partenaires.\n\nL\'union réussie entre créativité événementielle et impact social.',
+ tags:['Caritatif','Thème Pixar','Scénographie','Partenariat','Bénévolat']},
+
+{id:9,  type:'property', th:'exp', name:'Mécénat\n& Comm.', icon:'📣',
+ title:'Mission Mécénat — Communication Associative',
+ story:'Rédaction de dossiers de mécénat, contact avec les entreprises donatrices, organisation des temps forts de la relation partenaires.\n\nManon comprend les deux faces de l\'événementiel : créer pour émouvoir, mais aussi pour convaincre.',
+ tags:['Mécénat','Rédaction','Partenaires','Communication','Impact']},
+
+{id:10, type:'corner', th:'corner', name:'Simple\nVisite', icon:'🚌',
+ title:'Simple Visite — Terrain & Formation',
+ story:'Un carrefour. Entre le terrain et la salle de cours, entre l\'expérience empirique et la formation structurée.\n\nManon a appris à faire dialoguer les deux. La théorie sans la pratique reste abstraite. La pratique sans la théorie reste empirique. Elle refuse de choisir.',
+ tags:['Transition','Équilibre','Réflexion']},
+
+{id:11, type:'property', th:'form', name:'Lycée\nBlaringhem', icon:'🎓',
+ title:'Lycée Louis Blaringhem — La Vocation Naît',
+ story:'Béthune, Lycée Louis Blaringhem. C\'est ici que tout commence. Entre les cours et les premières expériences associatives, la conviction se forge : créer des expériences qui marquent les gens.\n\nBaccalauréat obtenu en 2024. Une page se tourne.',
+ tags:['Bac 2024','Béthune','Vocation','Lycée']},
+
+{id:12, type:'community', th:'card', name:'Carte\nFormation', icon:'📦', title:null, story:null, tags:[]},
+
+{id:13, type:'property', th:'form', name:'Vocation\nÉvénementiel', icon:'✨',
+ title:'La Vocation — L\'Événementiel Comme Évidence',
+ story:'L\'événementiel n\'est pas un choix par défaut — c\'est une certitude construite. Orchestrer une émotion collective, donner vie à un concept, créer une atmosphère : c\'est un métier aussi rigoureux que passionnant.\n\nCette conviction, Manon ne l\'a jamais perdue.',
+ tags:['Passion','Vocation','Conviction','Sens']},
+
+{id:14, type:'property', th:'form', name:'ISEFAC\nLille', icon:'🏛️',
+ title:'ISEFAC Lille — Bachelor Événementiel 2024–2027',
+ story:'Pédagogie par l\'action : chaque cours est un tremplin vers un projet réel. Manon intègre la formation en 2024 avec une ambition claire : maîtriser tous les maillons de la chaîne événementielle.\n\nDe la conception à l\'exécution, de la scénographie à la communication.',
+ tags:['ISEFAC Lille','Bachelor','2024-2027','Pédagogie active']},
+
+{id:15, type:'station', th:'station', name:'Gare\nSavoir', icon:'📚',
+ title:'La Boîte à Outils — Compétence Clé',
+ story:'Canva, InDesign, gestion de projet, scénographie, droit des contrats, communication digitale, montage vidéo...\n\nManon construit méthodiquement son arsenal. Chaque outil appris est une nouvelle corde à son arc créatif.',
+ tags:['Canva','InDesign','Gestion projet','Outils digitaux']},
+
+{id:16, type:'property', th:'form', name:'Bachelor\nAnnées 1&2', icon:'📐',
+ title:'Bachelor Événementiel — Deux Ans d\'Immersion',
+ story:'Projets pédagogiques, concours inter-écoles, interventions de professionnels du secteur, stages terrain.\n\nManon ne se contente pas d\'assister — elle s\'implique dans chaque projet comme s\'il était professionnel.',
+ tags:['Projets pédagogiques','Concours','Stages','Engagement']},
+
+{id:17, type:'chance', th:'card', name:'Carte\nAnecdote', icon:'❓', title:null, story:null, tags:[]},
+
+{id:18, type:'property', th:'form', name:'Bénévolat\nISEFAC', icon:'🏫',
+ title:'Open House & Student Expo — Bénévolat ISEFAC',
+ story:'Journées portes ouvertes, salons des étudiants : Manon tient des stands, accueille des lycéens, répond aux questions.\n\nElle vend la formation qu\'elle vit de l\'intérieur — avec la crédibilité de celle qui la vit.',
+ tags:['Open House','Student Expo','Bénévolat','Accueil']},
+
+{id:19, type:'property', th:'form', name:'Lilliarious\n& Street Food', icon:'🎭',
+ title:'Festivals Bénévoles — Lilliarious & Street Food',
+ story:'Deux festivals majeurs de la métropole lilloise. Coordination de bénévoles, gestion des espaces, logistique en conditions live.\n\nLe vrai terrain. La vraie pression. La vraie satisfaction.',
+ tags:['Lilliarious','Street Food Festival','Bénévolat','Logistique']},
+
+{id:20, type:'corner', th:'corner', name:'Pause\nCréative', icon:'☕',
+ title:'Pause Créative — S\'Inspirer du Monde',
+ story:'New York. Athènes. Istanbul. Et bien d\'autres.\n\nManon nourrit sa créativité par les voyages. Chaque culture traversée, chaque atmosphère ressentie enrichit sa façon de concevoir des expériences. L\'inspiration ne se décrète pas — elle se cultive.',
+ tags:['New York','Athènes','Istanbul','Voyages','Inspirations']},
+
+{id:21, type:'property', th:'proj', name:'Cartes sur Tables\n190 Participants', icon:'📋',
+ title:'Cartes sur Tables — 6e Édition',
+ story:'Coordination de A à Z : programme, logistique, communication, gestion de 50 intervenants professionnels et 190 participants.\n\nJournée de networking événementiel : tables rondes, ateliers, pitchs. Zéro incident. Satisfaction maximale.',
+ tags:['190 participants','50 pros','Coordination','6e édition']},
+
+{id:22, type:'community', th:'card', name:'Carte\nProjets', icon:'📦', title:null, story:null, tags:[]},
+
+{id:23, type:'property', th:'proj', name:'Carré Gourmand\nConcept', icon:'🌟',
+ title:'Le Carré Gourmand — Un Festival Né en Cours',
+ story:'L\'idée naît en cours. Elle grandit en projet. Elle devient réalité. Un festival gastronomique immersif en quatre univers culinaires distincts.\n\nManon le porte de la conception initiale à l\'exécution finale : concept, budget, planning, équipe, logistique, communication.',
+ tags:['Festival gastronomique','Concept','Budget','Planning']},
+
+{id:24, type:'chance', th:'card', name:'Carte\nAnecdote', icon:'❓', title:null, story:null, tags:[]},
+
+{id:25, type:'property', th:'proj', name:'Finale UNIMEV\nNationale', icon:'🏆',
+ title:'Finale Nationale UNIMEV — Le Carré Gourmand',
+ story:'Sélectionné parmi des dizaines de projets étudiants à travers la France, le Carré Gourmand monte sur la scène nationale UNIMEV.\n\nManon présente devant un jury de professionnels reconnus. La reconnaissance du secteur événementiel.',
+ tags:['UNIMEV','Finale nationale','Jury pro','Pitch']},
+
+{id:26, type:'station', th:'station', name:'Gare\nProjets', icon:'🚀',
+ title:'Pensée Systémique — Compétence Clé',
+ story:'Chaque projet suit une même logique rigoureuse : concept → design → planning → équipe → exécution → bilan.\n\nCette approche systémique transforme de bonnes idées en événements mémorables.',
+ tags:['Méthode','Systémique','Process','Exécution']},
+
+{id:27, type:'property', th:'proj', name:'Carré Gourmand\n4 Univers', icon:'🍽️',
+ title:'Le Carré Gourmand — 4 Univers Immersifs',
+ story:'Quatre univers culinaires conçus de zéro : identité visuelle propre, scénographie pensée dans les moindres détails, mobilier, éclairage, ambiance sonore.\n\nChaque espace raconte une histoire sensorielle différente.',
+ tags:['4 univers','Scénographie','Identité visuelle','Immersion']},
+
+{id:28, type:'community', th:'card', name:'Carte\nProjets', icon:'📦', title:null, story:null, tags:[]},
+
+{id:29, type:'property', th:'proj', name:'Expo Photo\n3 Prix', icon:'📸',
+ title:'Exposition Photo — Écho, Ombre & Lumière',
+ story:'Projet artistique explorant l\'écho, l\'ombre et la lumière. Un projet qui révèle une autre dimension de Manon : la créatrice visuelle.\n\n3 prix remportés — Prix du Public, Meilleure Production Vidéo, Meilleur Éclairage. La lumière, c\'est son affaire.',
+ tags:['Prix du public','Meilleure vidéo','Meilleur éclairage','Artistique']},
+
+{id:30, type:'corner', th:'corner', name:'Alternance\n2026', icon:'⚡',
+ title:'Prochaine Étape — L\'Alternance 2026',
+ story:'Septembre 2026. Manon entre en 3e année de Bachelor et cherche une alternance en production événementielle.\n\nC\'est vers ce point que convergent toutes les cases de ce plateau. Ses expériences, ses projets, ses compétences. Tout est prêt pour le prochain chapitre.',
+ tags:['Alternance 2026','3e année','Production événementielle','Objectif']},
+
+{id:31, type:'property', th:'comp', name:'Scéno\n& Design', icon:'🎨',
+ title:'Scénographie & Design — La Signature Manon',
+ story:'Transformer un espace vide en expérience sensorielle. Concevoir des univers visuels qui racontent une histoire avant même qu\'un mot soit prononcé.\n\nLa compétence où Manon se distingue le plus — son ADN créatif, sa façon de signer chaque événement.',
+ tags:['Scénographie','Design','Univers visuel','Identité']},
+
+{id:32, type:'community', th:'card', name:'Carte\nCompétences', icon:'📦', title:null, story:null, tags:[]},
+
+{id:33, type:'property', th:'comp', name:'Communication\nDigitale', icon:'📱',
+ title:'Communication Digitale — Contenu & Visibilité',
+ story:'Création de contenus visuels et rédactionnels, gestion des réseaux sociaux, production vidéo, Canva, InDesign.\n\nLa communication digitale comme prolongement naturel de l\'événementiel. Chaque événement mérite une narration.',
+ tags:['Canva','InDesign','Réseaux sociaux','Vidéo']},
+
+{id:34, type:'chance', th:'card', name:'Carte\nAnecdote', icon:'❓', title:null, story:null, tags:[]},
+
+{id:35, type:'property', th:'comp', name:'Gestion\nde Projet', icon:'📊',
+ title:'Gestion de Projet — Rigueur & Créativité',
+ story:'Budget, rétroplanning, coordination d\'équipe, relation prestataires, gestion des imprévus.\n\nQuand tout déraille, Manon cherche la solution, pas le coupable.',
+ tags:['Budget','Rétroplanning','Prestataires','Rigueur']},
+
+{id:36, type:'station', th:'station', name:'Gare\nHorizon', icon:'🌅',
+ title:'Soft Skills — Compétence Clé',
+ story:'Gestion du stress, relation client, leadership bienveillant, créativité sous pression, communication interpersonnelle.\n\nCes compétences transversales sont le véritable différenciateur. Elles se forgent sur le terrain, pas dans les livres.',
+ tags:['Gestion stress','Relation client','Leadership','Créativité']},
+
+{id:37, type:'chance', th:'card', name:'Carte\nAnecdote', icon:'❓', title:null, story:null, tags:[]},
+
+{id:38, type:'property', th:'comp', name:'Belle Aventure\nProduction', icon:'🎬',
+ title:'Belle Aventure Production — L\'Objectif',
+ story:'Belle Aventure Production. La case finale, l\'horizon vers lequel tout converge.\n\nManon candidate pour une alternance en production événementielle. C\'est ici que son parcours, ses projets et ses compétences trouvent leur prochain terrain d\'expression.',
+ tags:['Belle Aventure','Production événementielle','Alternance']},
+
+{id:39, type:'property', th:'comp', name:'Philosophie\nManon', icon:'💫',
+ title:'"Je ne crée pas des événements. Je crée des moments qui durent."',
+ story:'Cette phrase, c\'est l\'ADN de Manon. Pas une posture — une conviction profonde qui guide chacune de ses décisions, de la scénographie d\'un festival à l\'accueil d\'un visiteur.\n\nCréer de l\'émotion, de la mémorabilité, de l\'impact. C\'est pourquoi elle fait ce métier.',
+ tags:['Vision','Philosophie','Émotion','Impact']},
+];
+
+const CC=[
+  {icon:'🏆',title:'Triple Lauréate',text:'3 prix en une exposition : Prix du Public, Meilleure Vidéo, Meilleur Éclairage.',tags:['Prix','Expo photo']},
+  {icon:'💎',title:'LVMH te Sélectionne',text:'Brand Ambassador pour la tournée nationale LVMH You & Me. Luxe, exigence, rayonnement.',tags:['LVMH','Sélection']},
+  {icon:'📋',title:'190 Participants',text:'Cartes sur Tables, 6e édition. 190 participants, 50 professionnels, zéro incident.',tags:['Coordination']},
+  {icon:'🌍',title:'Voyage Inspirant',text:'New York, Athènes, Istanbul. Chaque voyage nourrit la sensibilité créative.',tags:['Voyage']},
+  {icon:'🚀',title:'Finale UNIMEV',text:'Le Carré Gourmand représente ISEFAC Lille sur la scène nationale professionnelle.',tags:['UNIMEV']},
+  {icon:'🎨',title:'4 Univers Immersifs',text:'Le Carré Gourmand : 4 espaces avec identité, scénographie et atmosphère propres.',tags:['Scéno']},
+  {icon:'🤝',title:'Impact Solidaire',text:'Giving Tuesday × La Sauvegarde du Nord. L\'événementiel peut aussi changer les choses.',tags:['Solidaire']},
+  {icon:'✨',title:'Sa Philosophie',text:'"Je ne crée pas des événements. Je crée des moments qui durent."',tags:['Vision']},
+];
+const AC=[
+  {icon:'⚡',title:'Gestion de Crise',text:'Prestataire désisté 2h avant l\'ouverture. Solution trouvée en 20 min. Le public ne voit rien.',tags:['Résilience']},
+  {icon:'🎤',title:'Pitch Devant Jury',text:'Présentation du Carré Gourmand aux finales UNIMEV. Aisance, conviction, maîtrise.',tags:['Pitch']},
+  {icon:'🌟',title:'Réseau Inattendu',text:'Un bénévolat au Lilliarious Festival ouvre une porte professionnelle inattendue.',tags:['Réseau']},
+  {icon:'💡',title:'L\'Idée Qui Devient Réalité',text:'Un concept né en cours devient le projet qui la distingue au niveau national.',tags:['Innovation']},
+  {icon:'📸',title:'La Lumière Comme Signature',text:'Meilleur Éclairage à l\'expo photo. La lumière est bien plus qu\'une technique.',tags:['Artistique']},
+  {icon:'⏰',title:'Délai Maîtrisé',text:'Le Carré Gourmand en 3 semaines. Pression totale, détails soignés, résultat irréprochable.',tags:['Deadline']},
+  {icon:'🏅',title:'Prix du Public',text:'Le public vote pour elle. La meilleure validation : être reconnue par ceux pour qui on crée.',tags:['Prix public']},
+  {icon:'🎯',title:'Tous Indicateurs au Vert',text:'Fréquentation, satisfaction, couverture médiatique — les trois piliers réunis.',tags:['Succès']},
+];
+
+// grid map: [row, col] 0-indexed
+function sg(i){
+  if(i===0)  return[10,10];
+  if(i<=9)   return[10,10-i];
+  if(i===10) return[10,0];
+  if(i<=19)  return[10-(i-10),0];
+  if(i===20) return[0,0];
+  if(i<=29)  return[0,i-20];
+  if(i===30) return[0,10];
+  if(i<=39)  return[i-30,10];
+}
+
+// pixel center of a grid cell within .board (1050×1050)
+function cellPixel(r,c){
+  const x = c===0?60 : c===10?990 : 75+c*90;
+  const y = r===0?60 : r===10?990 : 75+r*90;
+  return{x,y};
+}
+
+let selId=-1, panelOpen=false, ccI=0, acI=0, camZoom=1.0, fcatTimer=null;
+const shCC=[...CC].sort(()=>Math.random()-.5);
+const shAC=[...AC].sort(()=>Math.random()-.5);
+let charPionEl=null, charShadowEl=null;
+
+// ── BUILD BOARD ──
+function buildBoard(){
+  const b=document.getElementById('board');
+  b.innerHTML='';
+  for(let r=0;r<=10;r++){
+    for(let c=0;c<=10;c++){
+      if(r>=1&&r<=9&&c>=1&&c<=9){
+        if(r===1&&c===1) b.appendChild(mkCenter());
+        continue;
+      }
+      const sp=SP.find(s=>{const[sr,sc]=sg(s.id);return sr===r&&sc===c;});
+      if(!sp) continue;
+      const el=mkCell(sp,r,c);
+      el.style.cssText=`grid-column:${c+1};grid-row:${r+1};`;
+      el.onclick=()=>openSp(sp);
+      b.appendChild(el);
+    }
+  }
+
+  // Character pion
+  charPionEl=document.createElement('div');
+  charPionEl.className='char-pion';
+  charPionEl.innerHTML=manonSVG();
+  b.appendChild(charPionEl);
+
+  charShadowEl=document.createElement('div');
+  charShadowEl.className='char-shadow';
+  b.appendChild(charShadowEl);
+
+  moveChar(10,10,true);
+}
+
+function mkCell(sp,r,c){
+  const th=TH[sp.th]||TH.card;
+  const isC=sp.type==='corner';
+  // Orientation class for color bar placement
+  let or='';
+  if(r===10) or='rb'; else if(r===0) or='rt';
+  else if(c===0) or='cl2'; else if(c===10) or='cr2';
+
+  const el=document.createElement('div');
+  el.id='cell-'+sp.id;
+  el.className='cell '+(isC?'corner ':'')+sp.type+' '+or;
+  el.style.setProperty('--glow',th.col+'55');
+
+  if(!isC && sp.th!=='card' && sp.th!=='station'){
+    const bar=document.createElement('div');
+    bar.className='cbar';
+    bar.style.background=`linear-gradient(90deg,${th.col},${th.col}99)`;
+    el.appendChild(bar);
+  }
+
+  if(isC){ el.appendChild(mkCorner(sp)); return el; }
+
+  // Inner wrapper (rotated for side cells)
+  const inner=document.createElement('div');
+  inner.className='cell-inner';
+
+  const ci=document.createElement('div'); ci.className='ci'; ci.textContent=sp.icon;
+  const cn=document.createElement('div'); cn.className='cn'; cn.innerHTML=sp.name.replace('\n','<br>');
+  inner.appendChild(ci); inner.appendChild(cn);
+
+  if(sp.type==='property'){
+    const d=document.createElement('div'); d.className='cdot'; d.style.background=th.col; inner.appendChild(d);
+  }
+  el.appendChild(inner);
+  return el;
+}
+
+function mkCorner(sp){
+  const colMap={
+    0: {c1:'#FF822B',bg:'rgba(255,130,43,.07)',brd:'rgba(255,130,43,.3)'},
+    10:{c1:'#4D7FFF',bg:'rgba(77,127,255,.07)',brd:'rgba(77,127,255,.3)'},
+    20:{c1:'#FF9944',bg:'rgba(255,153,68,.07)', brd:'rgba(255,153,68,.3)'},
+    30:{c1:'#FFAB62',bg:'rgba(255,171,98,.07)', brd:'rgba(255,171,98,.3)'},
+  };
+  const{c1,bg,brd}=colMap[sp.id]||{c1:'#888',bg:'transparent',brd:'transparent'};
+  const inner=document.createElement('div');
+  inner.className='cnr';
+  // Colored accent inset border
+  inner.style.cssText=`box-shadow:inset 0 0 0 2px ${brd};background:${bg};border-radius:2px`;
+  const icon=document.createElement('div');
+  icon.className='cnr-icon';
+  icon.textContent={0:'▶',10:'🚌',20:'☕',30:'⚡'}[sp.id]||sp.icon;
+  const parts=sp.name.split('\n');
+  const l1=document.createElement('div');
+  l1.className='cnr-lbl';
+  l1.style.color=c1;
+  l1.textContent=parts[0];
+  const l2=document.createElement('div');
+  l2.className='cnr-sub';
+  l2.textContent=parts[1]||'';
+  inner.appendChild(icon);
+  inner.appendChild(l1);
+  inner.appendChild(l2);
+  return inner;
+}
+
+// BAP-inspired zigzag SVG in center
+function zigzagSVG(){
+  const pts1='0,11 11,0 22,11 33,0 44,11 55,0 66,11 77,0 88,11 99,0 110,11';
+  const pts2='0,11 11,0 22,11 33,0 44,11 55,0 66,11 77,0 88,11 99,0 110,11';
+  return `<svg class="bc-zz" viewBox="0 0 110 14" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <polyline points="${pts1}" fill="none" stroke="#FF822B" stroke-width="1.8" stroke-linejoin="miter"/>
+    <polyline points="${pts2}" fill="none" stroke="#FF822B" stroke-width="1.4" stroke-linejoin="miter" transform="translate(0,4)" opacity=".5"/>
+  </svg>`;
+}
+
+function mkCenter(){
+  const d=document.createElement('div');
+  d.className='board-center';
+  d.style.cssText='grid-column:2/11;grid-row:2/11;';
+  d.innerHTML=`
+    <div class="bc-glow"></div>
+    <div class="bc-kicker">Fast‑Dealing Experience Portfolio</div>
+    <div class="bc-title">MANOPOLY</div>
+    <div class="bc-name">Manon Mikolajczak · Événementiel</div>
+    ${zigzagSVG()}
+    <div class="bc-quote">"Je ne crée pas des événements.<br>Je crée des moments qui durent."</div>
+    <div class="bc-info">
+      <span>📍 Lille · ISEFAC Lille · Bachelor Événementiel</span>
+      <span>📧 manon.mikolajczak@isefac.fr · 06 99 65 97 48</span>
+    </div>
+    <div class="bc-chips">
+      <span class="bc-chip">ISEFAC Lille</span><span class="bc-chip">Bachelor Event.</span>
+      <span class="bc-chip">Alternance 2026</span><span class="bc-chip">Scénographie</span>
+      <span class="bc-chip">Finale UNIMEV</span><span class="bc-chip">LVMH Brand Amb.</span>
+    </div>`;
+  return d;
+}
+
+// Manon character SVG (B&W halftone inspired: curly hair, blazer, smile, ZV belt)
+function manonSVG(){
+  return `<svg viewBox="0 0 58 78" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Blazer -->
+  <path d="M10 78 L48 78 L48 47 C48 42 44 38 39 37 L29 41 L19 37 C14 38 10 42 10 47Z" fill="#0f0f0f"/>
+  <!-- Shirt lines -->
+  <line x1="29" y1="41" x2="22" y2="48" stroke="#252525" stroke-width="1.2"/>
+  <line x1="29" y1="41" x2="36" y2="48" stroke="#252525" stroke-width="1.2"/>
+  <!-- Belt -->
+  <rect x="22" y="65" width="14" height="8" rx="1.5" fill="#1a1a1a" stroke="#3a3a3a" stroke-width=".8"/>
+  <text x="29" y="71.5" text-anchor="middle" font-family="sans-serif" font-size="5" font-weight="900" fill="#666">ZV</text>
+  <!-- Neck -->
+  <rect x="24.5" y="32" width="9" height="9" rx="3.5" fill="#cba882"/>
+  <!-- Head -->
+  <ellipse cx="29" cy="26" rx="13.5" ry="14" fill="#cba882"/>
+  <!-- Hair coverage on sides -->
+  <ellipse cx="17" cy="25" rx="5" ry="10" fill="#101010"/>
+  <ellipse cx="41" cy="25" rx="5" ry="10" fill="#101010"/>
+  <!-- Hair top -->
+  <path d="M16 22 C14 7 44 7 42 22 C40 13 29 10 29 10 C29 10 18 13 16 22Z" fill="#101010"/>
+  <!-- Left curls (3 layers) -->
+  <ellipse cx="13.5" cy="27" rx="4.5" ry="7" fill="#101010"/>
+  <ellipse cx="12.5" cy="34" rx="4" ry="6.5" fill="#101010"/>
+  <ellipse cx="14" cy="40" rx="3.5" ry="5" fill="#101010"/>
+  <!-- Right curls -->
+  <ellipse cx="44.5" cy="27" rx="4.5" ry="7" fill="#101010"/>
+  <ellipse cx="45.5" cy="34" rx="4" ry="6.5" fill="#101010"/>
+  <ellipse cx="44" cy="40" rx="3.5" ry="5" fill="#101010"/>
+  <!-- Eyes -->
+  <ellipse cx="24" cy="25" rx="2" ry="2.2" fill="#1e1005"/>
+  <ellipse cx="34" cy="25" rx="2" ry="2.2" fill="#1e1005"/>
+  <!-- Eye shine -->
+  <circle cx="25" cy="24.2" r=".8" fill="rgba(255,255,255,.6)"/>
+  <circle cx="35" cy="24.2" r=".8" fill="rgba(255,255,255,.6)"/>
+  <!-- Smile -->
+  <path d="M22 30 Q29 35 36 30" stroke="#9a6a40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+</svg>`;
+}
+
+function moveChar(r, c, instant){
+  if(!charPionEl) return;
+  const{x,y}=cellPixel(r,c);
+  if(instant){
+    charPionEl.style.transition='none';
+    charShadowEl.style.transition='none';
+  } else {
+    charPionEl.style.transition='left .7s cubic-bezier(.16,1,.3,1), top .7s cubic-bezier(.16,1,.3,1)';
+    charShadowEl.style.transition='left .7s cubic-bezier(.16,1,.3,1), top .7s cubic-bezier(.16,1,.3,1)';
+    // Hop animation
+    charPionEl.classList.remove('hopping');
+    void charPionEl.offsetWidth;
+    charPionEl.classList.add('hopping');
+    charPionEl.addEventListener('animationend',()=>charPionEl.classList.remove('hopping'),{once:true});
+  }
+  charPionEl.style.left=x+'px';
+  charPionEl.style.top=y+'px';
+  charShadowEl.style.left=x+'px';
+  charShadowEl.style.top=(y+8)+'px';
+}
+
+// ── PANEL ──
+function openSp(sp){
+  // Remove sel + force animation restart
+  document.querySelectorAll('.cell.sel').forEach(e=>{
+    e.classList.remove('sel');
+    void e.offsetWidth;
+  });
+  const cellEl=document.getElementById('cell-'+sp.id);
+  if(cellEl){ void cellEl.offsetWidth; cellEl.classList.add('sel'); }
+  selId=sp.id;
+
+  const[r,c]=sg(sp.id);
+  moveChar(r,c,false);
+
+  const newZoom = (sp.id >= 20 && sp.id <= 30) ? 1.25 : 1.0;
+  if(newZoom !== camZoom){ camZoom = newZoom; scaleBoard(); }
+
+  let data=sp;
+  if(sp.type==='community'){const cc=shCC[ccI++%shCC.length];data={...sp,title:cc.title,story:cc.text,tags:cc.tags,icon:cc.icon};}
+  if(sp.type==='chance'){const ac=shAC[acI++%shAC.length];data={...sp,title:ac.title,story:ac.text,tags:ac.tags,icon:ac.icon};}
+  renderPanel(data);
+  if(!panelOpen){
+    panelOpen=true;
+    document.getElementById('panel').classList.add('open');
+    document.getElementById('backdrop').classList.add('open');
+  }
+  document.querySelector('.hhint').textContent='← → naviguer · ESC fermer';
+}
+
+function closePanel(){
+  panelOpen=false;
+  document.getElementById('panel').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('open');
+  document.querySelectorAll('.cell.sel').forEach(e=>e.classList.remove('sel'));
+  // selId intentionally kept: arrows still work after close to reopen on next/prev cell
+  if(camZoom !== 1.0){ camZoom = 1.0; scaleBoard(); }
+  document.querySelector('.hhint').textContent='← → continuer · cliquer une case';
+}
+
+function renderPanel(sp){
+  const th=TH[sp.th]||TH.card;
+  const{p,n}=nav(sp.id);
+  const html=(sp.story||'').replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>');
+  document.getElementById('pc').innerHTML=`
+    <div class="pcard">
+      <div class="pbar" style="background:${th.col}"></div>
+      <div class="ptheme" style="color:${th.col}">${th.label}</div>
+      <div class="pico">${sp.icon||'🎯'}</div>
+      <div class="ptitle">${sp.title||sp.name.replace('\n',' ')}</div>
+      <div class="pstory"><p>${html}</p></div>
+    </div>
+    ${sp.tags?.length?`<div class="ptags">${sp.tags.map(t=>`<span class="ptag" style="color:${th.col};border-color:${th.col}44;background:${th.col}0e">${t}</span>`).join('')}</div>`:''}
+    <div class="pnav">
+      <button class="pnb" onclick="openSp(SP[${p}])">← Précédent</button>
+      <button class="pnb" onclick="openSp(SP[${n}])">Suivant →</button>
+    </div>`;
+}
+
+function nav(id){
+  let p=(id-1+40)%40,n=(id+1)%40;
+  while(SP[p].type==='community'||SP[p].type==='chance') p=(p-1+40)%40;
+  while(SP[n].type==='community'||SP[n].type==='chance') n=(n+1)%40;
+  return{p,n};
+}
+
+function fcat(cat,btn){
+  clearTimeout(fcatTimer);
+  document.querySelectorAll('.ptab').forEach(b=>{
+    b.classList.remove('act');b.style.background='';
+    b.style.color=TH[b.id.replace('t-','')]?.col||'#7A8CA0';
+  });
+  const th=TH[cat];
+  btn.classList.add('act');btn.style.background=th.col;btn.style.color='#000';
+  SP.forEach(sp=>{
+    const el=document.getElementById('cell-'+sp.id);if(!el) return;
+    const hit=sp.th===cat||sp.type==='corner';
+    el.style.opacity=hit?'1':'0.08';
+    el.style.filter=hit?'':'grayscale(1) brightness(.25)';
+  });
+  fcatTimer=setTimeout(()=>{
+    SP.forEach(sp=>{const el=document.getElementById('cell-'+sp.id);if(el){el.style.opacity='';el.style.filter='';}});
+    btn.classList.remove('act');btn.style.background='';btn.style.color=th.col;
+  },3500);
+}
+
+// ── SCALE + CENTER ──
+function scaleBoard(){
+  // perspective(1100px) rotateX(26deg) expands the visual footprint beyond CSS layout:
+  //   horizontal (near edge corners): ×1.265 wider than CSS width
+  //   vertical   (near edge row):     ×1.13  lower  than CSS height
+  // We correct for both so the board actually fits in the viewport.
+  const PERSP_W=1.265, PERSP_H=1.13;
+  const avW=window.innerWidth-20;
+  const avH=window.innerHeight-56-20;
+  const scBase=Math.max(Math.min(avW/(1100*PERSP_W), avH/(1100*PERSP_H), 1.0), .28);
+  const sc = scBase * camZoom;
+  // Shift board up: perspective makes visual center ~70px below CSS center; compensate + extra upward nudge.
+  // scale(sc) translateY(ty) → visual shift = ty × sc, so ty = -visualShift/sc gives consistent viewport pixels.
+  const upPx = 80; // visual pixels to raise the board
+  const ty = -(upPx / sc);
+  document.getElementById('bwrap').style.transform=`scale(${sc}) translateY(${ty}px)`;
+  setTimeout(positionLabels, 480);
+}
+
+// ── LABEL POSITIONING via getBoundingClientRect ──
+function positionLabels(){
+  const c0  = document.getElementById('cell-0')?.getBoundingClientRect();   // GO — bottom-right
+  const c10 = document.getElementById('cell-10')?.getBoundingClientRect();  // Simple Visite — bottom-left
+  const c20 = document.getElementById('cell-20')?.getBoundingClientRect();  // Pause — top-left
+  const c30 = document.getElementById('cell-30')?.getBoundingClientRect();  // Alternance — top-right
+  if(!c0||!c10||!c20||!c30) return;
+
+  // Helper: center of a rect
+  const cx = r => (r.left+r.right)/2;
+  const cy = r => (r.top+r.bottom)/2;
+
+  // TOP (Projets): centered above the far edge (c20 + c30 are top-left & top-right corners)
+  const topX = (cx(c20)+cx(c30))/2;
+  const topY = Math.min(c20.top,c30.top)-20;
+  setLabel('lbl-ct',topX,topY,'translate(-50%,-100%)');
+
+  // BOTTOM (Expériences): clamp to viewport
+  const botX = (cx(c0)+cx(c10))/2;
+  const botY = Math.min(Math.max(c0.bottom,c10.bottom)+10, window.innerHeight-14);
+  setLabel('lbl-cb',botX,botY,'translate(-50%,0%)');
+
+  // LEFT (Formation): clamp so rotated label stays fully in viewport
+  const leftX = Math.max(Math.min(c10.left,c20.left)-8, 22);
+  const leftY = (cy(c10)+cy(c20))/2;
+  setLabel('lbl-cl',leftX,leftY,'translate(-50%,-50%) rotate(-90deg)');
+
+  // RIGHT (Compétences): clamp so rotated label stays fully in viewport
+  const rightX = Math.min(Math.max(c0.right,c30.right)+8, window.innerWidth-22);
+  const rightY = (cy(c0)+cy(c30))/2;
+  setLabel('lbl-cr',rightX,rightY,'translate(-50%,-50%) rotate(90deg)');
+}
+
+function setLabel(id,x,y,transform){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.style.left=x+'px';
+  el.style.top=y+'px';
+  el.style.transform=transform;
+  el.classList.add('visible');
+}
+
+// ── KEYBOARD ──
+document.addEventListener('keydown',e=>{
+  if(selId<0) return;
+  const{p,n}=nav(selId);
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') openSp(SP[n]);
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp')   openSp(SP[p]);
+  if(e.key==='Escape') closePanel();
+});
+
+window.addEventListener('resize',scaleBoard);
+buildBoard();
+scaleBoard();
+
+// tiltIn animation = 1.4s. Position labels after it completes, then auto-open panel.
+setTimeout(positionLabels, 1600);
+setTimeout(()=>openSp(SP[0]),1800);
+</script>
+</body>
+</html>
